@@ -17,14 +17,20 @@ hl.device({
 })
 
 -- Mouse
-hl.device({
-    name         = "logitech-usb-receiver",
-    accel_profile = "flat",
-    sensitivity   = 0.0,
-})
+-- hl.device({
+--     name         = "logitech-usb-receiver",
+--     accel_profile = "flat",
+--     sensitivity   = 0.0,
+-- })
+--
+-- hl.device({
+--     name         = "logitech-usb-receiver-keyboard-1",
+--     accel_profile = "flat",
+--     sensitivity   = 0.0,
+-- })
 
 hl.device({
-    name         = "logitech-usb-receiver-keyboard-1",
+    name         = "logitech-pro-x-1",
     accel_profile = "flat",
     sensitivity   = 0.0,
 })

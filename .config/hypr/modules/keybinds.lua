@@ -3,9 +3,11 @@
 local mod = "SUPER"
 
 -- Applications
-hl.bind(mod .. " + RETURN",    hl.dsp.exec_cmd(terminal))
+hl.bind(mod .. " + RETURN",          hl.dsp.exec_cmd(terminal))
+hl.bind(mod .. " + SHIFT + RETURN", hl.dsp.exec_cmd("env NOTMUX=1 " .. terminal))
 hl.bind(mod .. " + BACKSLASH", hl.dsp.exec_cmd(browser))
-hl.bind(mod .. " + M",         hl.dsp.exec_cmd(spotify))
+hl.bind(mod .. " + BACKSPACE",    hl.dsp.exec_cmd(browser)) -- for ferris sweep
+-- hl.bind(mod .. " + M",         hl.dsp.exec_cmd(spotify))
 
 hl.bind(mod .. " + Q", hl.dsp.window.close())
 
@@ -28,6 +30,11 @@ for i = 1, 9 do
 end
 hl.bind(mod .. " + 0",         hl.dsp.focus({ workspace = 10 }))
 hl.bind(mod .. " + SHIFT + 0", hl.dsp.window.move({ workspace = 10, follow = true }))
+
+-- Consume Super+w-p to prevent bleed into tmux window switching (Super+q is already bound)
+for _, key in ipairs({ "W", "E", "R", "T", "Y", "U", "I", "O", "P" }) do
+    hl.bind(mod .. " + " .. key, hl.dsp.exec_cmd("true"))
+end
 
 -- Volume
 hl.bind("XF86AudioRaiseVolume", hl.dsp.exec_cmd("wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+"), { repeating = true, locked = true })
