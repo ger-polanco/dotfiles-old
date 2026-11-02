@@ -21,6 +21,23 @@ alias ls='eza -lah --icons --git'
 alias ll='eza -lh --color=auto --icons'
 alias la='eza -a --color=auto --icons'
 
+# History
+HISTFILE="$HOME/.local/state/zsh/history"
+[[ -d ${HISTFILE:h} ]] || mkdir -p "${HISTFILE:h}"
+HISTSIZE=10000
+SAVEHIST=10000
+setopt hist_ignore_all_dups hist_ignore_space share_history inc_append_history
+
+# Completion
+[[ -d ~/.cache/zsh ]] || mkdir -p ~/.cache/zsh
+autoload -Uz compinit && compinit -d ~/.cache/zsh/zcompdump
+zstyle ':completion:*' menu select
+zstyle ':completion:*' matcher-list 'm:{a-z}={A-Z}'
+
+# Keys: emacs-style line editing + fzf (Ctrl-R history, Ctrl-T files, Alt-C cd)
+bindkey -e
+command -v fzf >/dev/null && source <(fzf --zsh)
+
 # Auto-start/attach tmux on kitty open (skipped if NOTMUX is set)
 if [ -z "$TMUX" ] && [ -z "$NOTMUX" ]; then
     if ! tmux has-session 2>/dev/null; then
