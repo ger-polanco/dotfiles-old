@@ -1,5 +1,8 @@
 # ~/.zshrc
 
+# Path append 
+export PATH="$HOME/.local/bin:$PATH"
+
 # Environment variables
 export EDITOR=nvim
 export TERMINAL=kitty
@@ -17,4 +20,13 @@ alias dotfiles='git --git-dir=$HOME/.dotfiles/ --work-tree=$HOME'
 alias ls='eza -lah --icons --git'
 alias ll='eza -lh --color=auto --icons'
 alias la='eza -a --color=auto --icons'
-export PATH="$HOME/.local/bin:$PATH"
+
+# Auto-start/attach tmux on kitty open (skipped if NOTMUX is set)
+if [ -z "$TMUX" ] && [ -z "$NOTMUX" ]; then
+    if ! tmux has-session 2>/dev/null; then
+        ~/.local/bin/tmux-init
+        exec tmux attach-session -t main
+    else
+        exec tmux attach-session
+    fi
+fi
