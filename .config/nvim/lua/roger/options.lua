@@ -46,4 +46,3 @@ opt.winborder = "rounded"
 
 -- Completion - disable initial selection of first cmp
 vim.opt.completeopt = { "menuone", "noselect", "noinsert" }
-

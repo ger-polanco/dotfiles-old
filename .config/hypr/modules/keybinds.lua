@@ -7,7 +7,7 @@ hl.bind(mod .. " + RETURN",          hl.dsp.exec_cmd(terminal))
 hl.bind(mod .. " + SHIFT + RETURN", hl.dsp.exec_cmd("env NOTMUX=1 " .. terminal))
 hl.bind(mod .. " + BACKSLASH", hl.dsp.exec_cmd(browser))
 hl.bind(mod .. " + BACKSPACE",    hl.dsp.exec_cmd(browser)) -- for ferris sweep
--- hl.bind(mod .. " + M",         hl.dsp.exec_cmd(spotify))
+hl.bind(mod .. " + M",         hl.dsp.exec_cmd(spotify))
 
 hl.bind(mod .. " + Q", hl.dsp.window.close())
 
