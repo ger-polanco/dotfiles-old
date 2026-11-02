@@ -31,5 +31,17 @@ bind("n", "N", "Nzzzv")
 
 -- Diagnostics
 vim.keymap.set("n", "<leader>d", function()
-    vim.diagnostic.open_float(nil, { focusable = false })
-end, { desc = "Show LSP diagnostic" })
+    local bufnr, winid = vim.diagnostic.open_float(nil, {
+        focusable = true,
+    })
+
+    if winid then
+        vim.api.nvim_set_current_win(winid)
+
+        -- Close with <leader>d
+        vim.keymap.set("n", "<leader>d", function()
+            vim.api.nvim_win_close(winid, true)
+        end, { buffer = bufnr, silent = true })
+
+    end
+end)
