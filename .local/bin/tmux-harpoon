@@ -1,0 +1,256 @@
+#!/usr/bin/env bash
+# Harpoon-style session manager with vim keybinds
+
+PREDEFINED_LIST=("main" "monitor" "spotify")
+PREDEFINED="main monitor spotify"
+declare -A PREDEFINED_KEYS=(["main"]="↵" ["monitor"]="m" ["spotify"]="s")
+ORDER_FILE="$HOME/.config/tmux/session_order"
+
+get_user_sessions() {
+    local -a all=() ordered=()
+    while IFS= read -r name; do
+        [[ -z "$name" ]] && continue
+        [[ " $PREDEFINED " =~ " $name " ]] && continue
+        all+=("$name")
+    done < <(tmux list-sessions -F "#{session_name}" 2>/dev/null)
+
+    if [ -f "$ORDER_FILE" ]; then
+        while IFS= read -r name; do
+            [[ -z "$name" ]] && continue
+            for s in "${all[@]}"; do
+                [ "$s" = "$name" ] && ordered+=("$name") && break
+            done
+        done < "$ORDER_FILE"
+    fi
+
+    for s in "${all[@]}"; do
+        local found=0
+        for o in "${ordered[@]}"; do [ "$s" = "$o" ] && found=1 && break; done
+        [ "$found" -eq 0 ] && ordered+=("$s")
+    done
+
+    [ "${#ordered[@]}" -gt 0 ] && printf '%s\n' "${ordered[@]}"
+}
+
+declare -a sessions=()
+for p in "${PREDEFINED_LIST[@]}"; do
+    tmux has-session -t "=$p" 2>/dev/null && sessions+=("$p")
+done
+predefined_count=${#sessions[@]}
+
+mapfile -t user_sessions < <(get_user_sessions)
+sessions+=("${user_sessions[@]}")
+
+declare -a pending_deletes=()
+current=0
+pending_d=0
+
+is_predefined() { [ "$1" -lt "$predefined_count" ]; }
+
+is_marked() {
+    local name="${sessions[$1]}"
+    for d in "${pending_deletes[@]}"; do [ "$d" = "$name" ] && return 0; done
+    return 1
+}
+
+render() {
+    local n_user=${#user_sessions[@]}
+    local num_w=${#n_user}
+    [ "$num_w" -lt 1 ] && num_w=1
+
+    local frame="\033[H\033[2K\n"  # home + blank top margin
+
+    local user_idx=0 num key
+    for i in "${!sessions[@]}"; do
+        local name="${sessions[$i]}"
+        local sel=0
+        [ "$i" -eq "$current" ] && sel=1
+
+        if is_predefined "$i"; then
+            key="${PREDEFINED_KEYS[$name]}"
+            if [ "$sel" -eq 1 ]; then
+                frame+="\033[2K  \033[1;32m\xe2\x80\xba\033[0m \033[2m${key}\033[0m  \033[1;36m${name}\033[0m\n"
+            else
+                frame+="\033[2K    \033[2m${key}\033[0m  \033[36m${name}\033[0m\n"
+            fi
+        else
+            user_idx=$((user_idx + 1))
+            num=$(printf '%*d' "$num_w" "$user_idx")
+            if is_marked "$i"; then
+                if [ "$sel" -eq 1 ]; then
+                    frame+="\033[2K  \033[1;32m\xe2\x80\xba\033[0m \033[2m${num}\033[0m  \033[9;31m${name}\033[0m \033[2m[del]\033[0m\n"
+                else
+                    frame+="\033[2K    \033[2m${num}\033[0m  \033[9;2;31m${name}\033[0m \033[2m[del]\033[0m\n"
+                fi
+            else
+                if [ "$sel" -eq 1 ]; then
+                    frame+="\033[2K  \033[1;32m\xe2\x80\xba\033[0m \033[2m${num}\033[0m  \033[1m${name}\033[0m\n"
+                else
+                    frame+="\033[2K    \033[2m${num}\033[0m  ${name}\n"
+                fi
+            fi
+        fi
+    done
+
+    frame+="\033[0J"
+    printf '%b' "$frame"
+}
+
+run_window_mode() {
+    local session="$1"
+    local root
+    root=$(tmux display-message -t "$session" -p "#{session_path}")
+    local session_file="$root/.tmux-session"
+    local wcurrent=0
+
+    while true; do
+        mapfile -t wlist < <(tmux list-windows -t "$session" -F "#{window_index}:#{window_name}" 2>/dev/null)
+        local total=${#wlist[@]}
+
+        local frame="\033[H\033[2K\n"
+        frame+="\033[2K  \033[2m$session\033[0m\n\033[2K\n"
+        for wi in "${!wlist[@]}"; do
+            local wname="${wlist[$wi]#*:}"
+            if [ "$wi" -eq "$wcurrent" ]; then
+                frame+="\033[2K  \033[1;32m\xe2\x80\xba\033[0m  \033[1m${wname}\033[0m\n"
+            else
+                frame+="\033[2K     ${wname}\n"
+            fi
+        done
+        if [ "$wcurrent" -eq "$total" ]; then
+            frame+="\033[2K  \033[1;32m\xe2\x80\xba\033[0m  \033[2m+ add window\033[0m\n"
+        else
+            frame+="\033[2K     \033[2m+ add window\033[0m\n"
+        fi
+        frame+="\033[0J"
+        printf '%b' "$frame"
+
+        IFS= read -rsn1 wkey
+        case "$wkey" in
+            j) [ "$wcurrent" -lt "$total" ] && wcurrent=$((wcurrent + 1)) ;;
+            k) [ "$wcurrent" -gt 0 ] && wcurrent=$((wcurrent - 1)) ;;
+            J)
+                if [ "$wcurrent" -lt $((total - 1)) ]; then
+                    local widx_a="${wlist[$wcurrent]%%:*}"
+                    local widx_b="${wlist[$((wcurrent + 1))]%%:*}"
+                    tmux swap-window -s "$session:$widx_a" -t "$session:$widx_b"
+                    wcurrent=$((wcurrent + 1))
+                    tmux list-windows -t "$session" -F "#{window_name}" 2>/dev/null > "$session_file"
+                fi
+                ;;
+            K)
+                if [ "$wcurrent" -gt 0 ]; then
+                    local widx_a="${wlist[$wcurrent]%%:*}"
+                    local widx_b="${wlist[$((wcurrent - 1))]%%:*}"
+                    tmux swap-window -s "$session:$widx_a" -t "$session:$widx_b"
+                    wcurrent=$((wcurrent - 1))
+                    tmux list-windows -t "$session" -F "#{window_name}" 2>/dev/null > "$session_file"
+                fi
+                ;;
+            "")
+                if [ "$wcurrent" -lt "$total" ]; then
+                    local widx="${wlist[$wcurrent]%%:*}"
+                    tput cnorm; printf "\033[2J\033[H"
+                    tmux switch-client -t "$session"
+                    tmux select-window -t "$session:$widx"
+                    exit 0
+                else
+                    tput cnorm
+                    printf "\033[H\033[2J  Window name: "
+                    IFS= read -r wname
+                    tput civis
+                    [[ -z "$wname" ]] && continue
+                    tmux new-window -t "$session" -n "$wname" -c "$root"
+                    echo "$wname" >> "$session_file"
+                fi
+                ;;
+            r)
+                if [ "$wcurrent" -lt "$total" ]; then
+                    tput cnorm
+                    printf "\033[H\033[2J  New name: "
+                    IFS= read -r newname
+                    tput civis
+                    [[ -z "$newname" ]] && continue
+                    local widx="${wlist[$wcurrent]%%:*}"
+                    tmux rename-window -t "$session:$widx" "$newname"
+                    tmux list-windows -t "$session" -F "#{window_name}" 2>/dev/null > "$session_file"
+                fi
+                ;;
+            $'\e') return ;;
+        esac
+    done
+}
+
+tput civis
+trap 'tput cnorm; printf "\033[2J\033[H"' EXIT
+
+while true; do
+    render
+    IFS= read -rsn1 key
+
+    if [ "$pending_d" -eq 1 ]; then
+        pending_d=0
+        if [ "$key" = "d" ] && ! is_predefined "$current"; then
+            name="${sessions[$current]}"
+            found=0
+            for idx in "${!pending_deletes[@]}"; do
+                if [ "${pending_deletes[$idx]}" = "$name" ]; then
+                    unset 'pending_deletes[$idx]'
+                    pending_deletes=("${pending_deletes[@]}")
+                    found=1
+                    break
+                fi
+            done
+            [ "$found" -eq 0 ] && pending_deletes+=("$name")
+        fi
+        continue
+    fi
+
+    case "$key" in
+        "")  # Enter — switch first, then kill, then save order
+            target="${sessions[$current]}"
+            is_marked "$current" && target="${PREDEFINED_LIST[0]}"
+            tput cnorm; printf "\033[2J\033[H"
+            tmux switch-client -t "$target"
+            for name in "${pending_deletes[@]}"; do
+                [ -z "$name" ] && continue
+                tmux kill-session -t "$name" 2>/dev/null
+            done
+            {
+                for i in "${!sessions[@]}"; do
+                    is_predefined "$i" && continue
+                    is_marked "$i" && continue
+                    echo "${sessions[$i]}"
+                done
+            } > "$ORDER_FILE"
+            exit 0
+            ;;
+        $'\e') exit 0 ;;
+        j) [ "$current" -lt $((${#sessions[@]} - 1)) ] && current=$((current + 1)) ;;
+        k) [ "$current" -gt 0 ] && current=$((current - 1)) ;;
+        J)
+            if ! is_predefined "$current" && [ "$current" -lt $((${#sessions[@]} - 1)) ]; then
+                next=$((current + 1))
+                tmp="${sessions[$current]}"
+                sessions[$current]="${sessions[$next]}"
+                sessions[$next]="$tmp"
+                current=$next
+            fi
+            ;;
+        K)
+            if ! is_predefined "$current" && [ "$current" -gt "$predefined_count" ]; then
+                prev=$((current - 1))
+                tmp="${sessions[$current]}"
+                sessions[$current]="${sessions[$prev]}"
+                sessions[$prev]="$tmp"
+                current=$prev
+            fi
+            ;;
+        d) pending_d=1 ;;
+        " ")
+            if ! is_predefined "$current"; then
+                run_window_mode "${sessions[$current]}"
+            fi
+            ;;
+    esac
+done

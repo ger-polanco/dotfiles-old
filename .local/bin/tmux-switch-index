@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Switch to the Nth user session (excludes predefined sessions, follows order file)
+
+N="${1:?index required}"
+PREDEFINED="dotfiles btop"
+ORDER_FILE="$HOME/.config/tmux/session_order"
+
+declare -a all=() ordered=()
+
+while IFS= read -r name; do
+    [[ -z "$name" ]] && continue
+    [[ " $PREDEFINED " =~ " $name " ]] && continue
+    all+=("$name")
+done < <(tmux list-sessions -F "#{session_name}" 2>/dev/null)
+
+if [ -f "$ORDER_FILE" ]; then
+    while IFS= read -r name; do
+        [[ -z "$name" ]] && continue
+        for s in "${all[@]}"; do
+            [ "$s" = "$name" ] && ordered+=("$name") && break
+        done
+    done < "$ORDER_FILE"
+fi
+
+for s in "${all[@]}"; do
+    found=0
+    for o in "${ordered[@]}"; do [ "$s" = "$o" ] && found=1 && break; done
+    [ "$found" -eq 0 ] && ordered+=("$s")
+done
+
+declare -a sessions=("${ordered[@]}")
+
+target="${sessions[$((N-1))]}"
+[ -n "$target" ] && tmux switch-client -t "$target"
+exit 0

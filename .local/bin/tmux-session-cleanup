@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Remove a closed session from the order file
+SESSION_NAME="$1"
+ORDER_FILE="$HOME/.config/tmux/session_order"
+
+[ -z "$SESSION_NAME" ] && exit 0
+[ ! -f "$ORDER_FILE" ] && exit 0
+
+grep -v "^${SESSION_NAME}$" "$ORDER_FILE" > "${ORDER_FILE}.tmp" \
+    && mv "${ORDER_FILE}.tmp" "$ORDER_FILE"

@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Create predefined sessions on first tmux launch
+
+if ! tmux has-session -t main 2>/dev/null; then
+    tmux new-session -ds main -c "$HOME"
+fi
+
+if ! tmux has-session -t monitor 2>/dev/null; then
+    tmux new-session -ds monitor -c "$HOME"
+    tmux send-keys -t monitor "btop" Enter
+fi
+
+if ! tmux has-session -t spotify 2>/dev/null; then
+    tmux new-session -ds spotify -c "$HOME"
+    tmux send-keys -t spotify "spotify_player" Enter
+fi
