@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+# Shared tmux session logic (single source of truth for pinned sessions + order).
+#
+#   tmux-sessions init                 create pinned sessions if missing
+#   tmux-sessions pinned               print "name<TAB>key" for each pinned session
+#   tmux-sessions list                 print project sessions (non-pinned) in saved order
+#   tmux-sessions switch N             switch to the Nth project session (Alt+1-9)
+#   tmux-sessions cleanup NAME         drop NAME from the order file (session-closed hook)
+#   tmux-sessions save-windows S [OLD NEW]
+#                                      write session S's window order to <root>/.tmux-session,
+#                                      keeping each window's command (OLD->NEW handles a rename)
+
+# Pinned sessions: name, key shown in harpoon, start dir, optional command.
+# Their keybinds live in tmux.conf (Alt+Enter, Alt+M). They never get a number.
+PINNED=(
+    "main|↵|$HOME|"
+    "monitor|m|$HOME|btop"
+)
+ORDER_FILE="$HOME/.local/state/tmux/session_order"
+
+pinned_names() { local p; for p in "${PINNED[@]}"; do echo "${p%%|*}"; done; }
+
+is_pinned() { pinned_names | grep -qxF -- "$1"; }
+
+cmd_init() {
+    local p name key dir cmd
+    for p in "${PINNED[@]}"; do
+        IFS='|' read -r name key dir cmd <<<"$p"
+        tmux has-session -t "=$name" 2>/dev/null && continue
+        tmux new-session -ds "$name" -c "$dir"
+        [[ -n "$cmd" ]] && tmux send-keys -t "$name" "$cmd" Enter
+    done
+}
+
+cmd_pinned() {
+    local p name key _
+    for p in "${PINNED[@]}"; do
+        IFS='|' read -r name key _ <<<"$p"
+        tmux has-session -t "=$name" 2>/dev/null && printf '%s\t%s\n' "$name" "$key"
+    done
+}
+
+cmd_list() {
+    local -a live=() out=()
+    local s
+    while IFS= read -r s; do
+        [[ -n "$s" ]] && ! is_pinned "$s" && live+=("$s")
+    done < <(tmux list-sessions -F '#{session_name}' 2>/dev/null)
+
+    # Saved order first, then any live session not in the file.
+    if [[ -f "$ORDER_FILE" ]]; then
+        while IFS= read -r s; do
+            [[ " ${live[*]} " == *" $s "* ]] && out+=("$s")
+        done <"$ORDER_FILE"
+    fi
+    for s in "${live[@]}"; do
+        [[ " ${out[*]} " == *" $s "* ]] || out+=("$s")
+    done
+    ((${#out[@]})) && printf '%s\n' "${out[@]}"
+}
+
+cmd_switch() {
+    local n="${1:?index required}" target
+    target=$(cmd_list | sed -n "${n}p")
+    [[ -n "$target" ]] && tmux switch-client -t "=$target"
+    exit 0
+}
+
+cmd_cleanup() {
+    local name="$1"
+    [[ -n "$name" && -f "$ORDER_FILE" ]] || exit 0
+    grep -vxF -- "$name" "$ORDER_FILE" >"$ORDER_FILE.tmp"
+    mv "$ORDER_FILE.tmp" "$ORDER_FILE"
+}
+
+cmd_save_windows() {
+    local session="$1" old="${2:-}" new="${3:-}" root file line name cmd
+    root=$(tmux display-message -t "=$session:" -p '#{session_path}') || exit 1
+    file="$root/.tmux-session"
+    declare -A cmds=()
+    if [[ -f "$file" ]]; then
+        while IFS= read -r line; do
+            [[ -z "$line" ]] && continue
+            name="${line%%:*}"; name="${name%% }"
+            [[ "$line" == *:* ]] && { cmd="${line#*:}"; cmds[$name]="${cmd# }"; }
+        done <"$file"
+    fi
+    [[ -n "$old" && -n "${cmds[$old]:-}" ]] && cmds[$new]="${cmds[$old]}"
+    while IFS= read -r name; do
+        if [[ -n "${cmds[$name]:-}" ]]; then echo "$name: ${cmds[$name]}"; else echo "$name"; fi
+    done < <(tmux list-windows -t "=$session" -F '#{window_name}') >"$file"
+}
+
+mkdir -p "${ORDER_FILE%/*}"
+case "${1:-}" in
+    init) cmd_init ;;
+    pinned) cmd_pinned ;;
+    list) cmd_list ;;
+    switch) cmd_switch "$2" ;;
+    cleanup) cmd_cleanup "$2" ;;
+    save-windows) shift; cmd_save_windows "$@" ;;
+    *) sed -n '2,11p' "$0" >&2; exit 2 ;;
+esac

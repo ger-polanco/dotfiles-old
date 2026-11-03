@@ -36,12 +36,17 @@ zstyle ':completion:*' matcher-list 'm:{a-z}={A-Z}'
 
 # Keys: emacs-style line editing + fzf (Ctrl-R history, Ctrl-T files, Alt-C cd)
 bindkey -e
+# fzf look: list on top; inside tmux, open as a centered popup (like Alt+F)
+export FZF_DEFAULT_OPTS="--layout=reverse --border=rounded --info=inline"
+export FZF_CTRL_R_OPTS="--tmux center,80%,60%"
+export FZF_CTRL_T_OPTS="--tmux center,80%,60%"
+export FZF_ALT_C_OPTS="--tmux center,80%,60%"
 command -v fzf >/dev/null && source <(fzf --zsh)
 
 # Auto-start/attach tmux on kitty open (skipped if NOTMUX is set)
 if [ -z "$TMUX" ] && [ -z "$NOTMUX" ]; then
     if ! tmux has-session 2>/dev/null; then
-        ~/.local/bin/tmux-init
+        ~/.local/bin/tmux-sessions init
         exec tmux attach-session -t main
     else
         exec tmux attach-session

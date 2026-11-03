@@ -1,44 +1,17 @@
 #!/usr/bin/env bash
 # Harpoon-style session manager with vim keybinds
 
-PREDEFINED_LIST=("main" "monitor" "spotify")
-PREDEFINED="main monitor spotify"
-declare -A PREDEFINED_KEYS=(["main"]="↵" ["monitor"]="m" ["spotify"]="s")
-ORDER_FILE="$HOME/.config/tmux/session_order"
+TS="$HOME/.local/bin/tmux-sessions"
+ORDER_FILE="$HOME/.local/state/tmux/session_order"
 
-get_user_sessions() {
-    local -a all=() ordered=()
-    while IFS= read -r name; do
-        [[ -z "$name" ]] && continue
-        [[ " $PREDEFINED " =~ " $name " ]] && continue
-        all+=("$name")
-    done < <(tmux list-sessions -F "#{session_name}" 2>/dev/null)
-
-    if [ -f "$ORDER_FILE" ]; then
-        while IFS= read -r name; do
-            [[ -z "$name" ]] && continue
-            for s in "${all[@]}"; do
-                [ "$s" = "$name" ] && ordered+=("$name") && break
-            done
-        done < "$ORDER_FILE"
-    fi
-
-    for s in "${all[@]}"; do
-        local found=0
-        for o in "${ordered[@]}"; do [ "$s" = "$o" ] && found=1 && break; done
-        [ "$found" -eq 0 ] && ordered+=("$s")
-    done
-
-    [ "${#ordered[@]}" -gt 0 ] && printf '%s\n' "${ordered[@]}"
-}
-
-declare -a sessions=()
-for p in "${PREDEFINED_LIST[@]}"; do
-    tmux has-session -t "=$p" 2>/dev/null && sessions+=("$p")
-done
+declare -a sessions=() PREDEFINED_LIST=()
+declare -A PREDEFINED_KEYS=()
+while IFS=$'\t' read -r name key; do
+    sessions+=("$name"); PREDEFINED_LIST+=("$name"); PREDEFINED_KEYS[$name]="$key"
+done < <("$TS" pinned)
 predefined_count=${#sessions[@]}
 
-mapfile -t user_sessions < <(get_user_sessions)
+mapfile -t user_sessions < <("$TS" list)
 sessions+=("${user_sessions[@]}")
 
 declare -a pending_deletes=()
@@ -100,7 +73,6 @@ run_window_mode() {
     local session="$1"
     local root
     root=$(tmux display-message -t "$session" -p "#{session_path}")
-    local session_file="$root/.tmux-session"
     local wcurrent=0
 
     while true; do
@@ -135,7 +107,7 @@ run_window_mode() {
                     local widx_b="${wlist[$((wcurrent + 1))]%%:*}"
                     tmux swap-window -s "$session:$widx_a" -t "$session:$widx_b"
                     wcurrent=$((wcurrent + 1))
-                    tmux list-windows -t "$session" -F "#{window_name}" 2>/dev/null > "$session_file"
+                    "$TS" save-windows "$session"
                 fi
                 ;;
             K)
@@ -144,7 +116,7 @@ run_window_mode() {
                     local widx_b="${wlist[$((wcurrent - 1))]%%:*}"
                     tmux swap-window -s "$session:$widx_a" -t "$session:$widx_b"
                     wcurrent=$((wcurrent - 1))
-                    tmux list-windows -t "$session" -F "#{window_name}" 2>/dev/null > "$session_file"
+                    "$TS" save-windows "$session"
                 fi
                 ;;
             "")
@@ -156,12 +128,16 @@ run_window_mode() {
                     exit 0
                 else
                     tput cnorm
-                    printf "\033[H\033[2J  Window name: "
-                    IFS= read -r wname
+                    printf "\033[H\033[2J  Window (name or name: command): "
+                    IFS= read -r wline
                     tput civis
-                    [[ -z "$wname" ]] && continue
+                    [[ -z "$wline" ]] && continue
+                    local wname="${wline%%:*}" wcmd=""
+                    wname="${wname%% }"
+                    [[ "$wline" == *:* ]] && { wcmd="${wline#*:}"; wcmd="${wcmd# }"; }
                     tmux new-window -t "$session" -n "$wname" -c "$root"
-                    echo "$wname" >> "$session_file"
+                    [[ -n "$wcmd" ]] && tmux send-keys -t "$session:$wname" "$wcmd" Enter
+                    printf '%s\n' "$wline" >> "$root/.tmux-session"
                 fi
                 ;;
             r)
@@ -172,8 +148,9 @@ run_window_mode() {
                     tput civis
                     [[ -z "$newname" ]] && continue
                     local widx="${wlist[$wcurrent]%%:*}"
+                    local oldname="${wlist[$wcurrent]#*:}"
                     tmux rename-window -t "$session:$widx" "$newname"
-                    tmux list-windows -t "$session" -F "#{window_name}" 2>/dev/null > "$session_file"
+                    "$TS" save-windows "$session" "$oldname" "$newname"
                 fi
                 ;;
             $'\e') return ;;
