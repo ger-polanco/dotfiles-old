@@ -1,0 +1,13 @@
+[user]
+	name = ger-polanco
+	email = ger.polancomolina@gmail.com
+[init]
+	defaultBranch = main
+[color]
+	ui = auto
+[fetch]
+	prune = true
+[push]
+	autoSetupRemote = true
+[pull]
+	rebase = false
