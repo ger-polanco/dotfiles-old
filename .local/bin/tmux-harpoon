@@ -20,6 +20,8 @@ pending_d=0
 
 is_predefined() { [ "$1" -lt "$predefined_count" ]; }
 
+is_pinned_session() { [[ " ${PREDEFINED_LIST[*]} " == *" $1 "* ]]; }
+
 is_marked() {
     local name="${sessions[$1]}"
     for d in "${pending_deletes[@]}"; do [ "$d" = "$name" ] && return 0; done
@@ -69,11 +71,22 @@ render() {
     printf '%b' "$frame"
 }
 
+# Swap two windows without changing which one is active
+swap_windows() {
+    local active
+    active=$(tmux display-message -t "$1" -p '#{window_id}')
+    tmux swap-window -d -s "$1:$2" -t "$1:$3"
+    tmux select-window -t "$active"
+}
+
 run_window_mode() {
     local session="$1"
     local root
     root=$(tmux display-message -t "$session" -p "#{session_path}")
-    local wcurrent=0
+    # Start on the session's active window
+    local wcurrent
+    wcurrent=$(tmux list-windows -t "$session" -F '#{window_active}' | grep -n 1 | cut -d: -f1)
+    wcurrent=$((wcurrent - 1))
 
     while true; do
         mapfile -t wlist < <(tmux list-windows -t "$session" -F "#{window_index}:#{window_name}" 2>/dev/null)
@@ -105,7 +118,7 @@ run_window_mode() {
                 if [ "$wcurrent" -lt $((total - 1)) ]; then
                     local widx_a="${wlist[$wcurrent]%%:*}"
                     local widx_b="${wlist[$((wcurrent + 1))]%%:*}"
-                    tmux swap-window -s "$session:$widx_a" -t "$session:$widx_b"
+                    swap_windows "$session" "$widx_a" "$widx_b"
                     wcurrent=$((wcurrent + 1))
                     "$TS" save-windows "$session"
                 fi
@@ -114,7 +127,7 @@ run_window_mode() {
                 if [ "$wcurrent" -gt 0 ]; then
                     local widx_a="${wlist[$wcurrent]%%:*}"
                     local widx_b="${wlist[$((wcurrent - 1))]%%:*}"
-                    tmux swap-window -s "$session:$widx_a" -t "$session:$widx_b"
+                    swap_windows "$session" "$widx_a" "$widx_b"
                     wcurrent=$((wcurrent - 1))
                     "$TS" save-windows "$session"
                 fi
@@ -137,7 +150,7 @@ run_window_mode() {
                     [[ "$wline" == *:* ]] && { wcmd="${wline#*:}"; wcmd="${wcmd# }"; }
                     tmux new-window -t "$session" -n "$wname" -c "$root"
                     [[ -n "$wcmd" ]] && tmux send-keys -t "$session:$wname" "$wcmd" Enter
-                    printf '%s\n' "$wline" >> "$root/.tmux-session"
+                    is_pinned_session "$session" || printf '%s\n' "$wline" >> "$root/.tmux-session"
                 fi
                 ;;
             r)
@@ -160,6 +173,12 @@ run_window_mode() {
 
 tput civis
 trap 'tput cnorm; printf "\033[2J\033[H"' EXIT
+
+# Alt+Shift+Tab: go straight to the current session's window list
+if [ "${1:-}" = "windows" ]; then
+    run_window_mode "$(tmux display-message -p '#{session_name}')"
+    exit 0
+fi
 
 while true; do
     render

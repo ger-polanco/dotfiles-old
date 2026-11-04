@@ -13,8 +13,9 @@ Session-per-project workflow. Opening kitty attaches to tmux (`Super+Shift+Enter
 | `Alt+F` | Fuzzy-find a folder, then open or switch to its session |
 | `Alt+1–9` | Jump to project session N |
 | `Alt+Tab` | Harpoon: manage sessions and windows |
-| `Alt+N` | New window in the current directory |
-| `Alt+q … Alt+p` | Jump to window 1 … 10 |
+| `Alt+N` | New window in the current directory (asks for a name) |
+| `Alt+Shift+1–9` | Jump to window N |
+| `Alt+Shift+Tab` | Window list for this session: reorder, rename, add |
 | `Alt+V` | Copy mode: `v` select, `Ctrl-v` block, `y` copy to clipboard |
 | `Alt+Shift+X` | Kill the tmux server (asks first) |
 | `Ctrl+Space` | Prefix for anything else |
@@ -23,7 +24,7 @@ Selecting text with the mouse also copies it.
 
 ### Harpoon (`Alt+Tab`)
 `j`/`k` move · `J`/`K` reorder · `dd` mark for deletion · `Space` window menu · `Enter` apply · `Esc` cancel.
-In the window menu: `J`/`K` reorder · `r` rename · `Enter` on `+ add window` creates one. Changes are saved to `.tmux-session`.
+In the window list (`Alt+Shift+Tab`, or `Space` on a project in harpoon): `j`/`k` move · `J`/`K` reorder · `r` rename · `Enter` on `+ add window` creates one. In project sessions, these changes are saved to `.tmux-session`.
 
 ## Per-project windows: `.tmux-session`
 Put this file in a project root. Each line is `name` or `name: command`:

@@ -75,6 +75,7 @@ cmd_cleanup() {
 
 cmd_save_windows() {
     local session="$1" old="${2:-}" new="${3:-}" root file line name cmd
+    is_pinned "$session" && return 0
     root=$(tmux display-message -t "=$session:" -p '#{session_path}') || exit 1
     file="$root/.tmux-session"
     declare -A cmds=()
